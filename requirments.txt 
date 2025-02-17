@@ -1,3 +1,10 @@
 ollama
 llama-index
 llama-index-llms-ollama
+openinference-instrumentation-llama-index 
+opentelemetry-sdk 
+opentelemetry-exporter-otlp 
+opentelemetry-proto>=1.12
+arize-phoenix
+llama-index-callbacks-arize-phoenix
+pyvis
