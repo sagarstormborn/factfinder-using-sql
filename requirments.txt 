@@ -11,5 +11,6 @@ pyvis
 llama-index-llms-bedrock
 PyMySQL
 llama-index-embeddings-bedrock
-flask
+Flask<2.2
 flask_cors
+websockets
