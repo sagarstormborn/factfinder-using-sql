@@ -8,3 +8,8 @@ opentelemetry-proto>=1.12
 arize-phoenix
 llama-index-callbacks-arize-phoenix
 pyvis
+llama-index-llms-bedrock
+PyMySQL
+llama-index-embeddings-bedrock
+flask
+flask_cors
