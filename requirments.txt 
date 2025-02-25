@@ -14,3 +14,4 @@ llama-index-embeddings-bedrock
 Flask<2.2
 flask_cors
 websockets
+llama-index-utils-workflow
