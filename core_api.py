@@ -26,7 +26,9 @@ from llama_index.core.workflow import (
 )
 from llama_index.llms.openai import OpenAI
 from llama_index.llms.bedrock import Bedrock
+from dotenv import load_dotenv
 import os
+
 
 # --------------------
 # Flask Application
@@ -39,6 +41,7 @@ CORS(app)
 # llm init 
 # --------------------
 # Fetch AWS credentials from environment variables
+load_dotenv()
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")  # Default to "us-east-1" if not set
@@ -218,7 +221,7 @@ async def websocket_workflow_handler(websocket):
     # Process events from the workflow
     async for event in handler.stream_events():
         if isinstance(event, CustomInputQuestion):
-            # Send the prompt to the client
+            # Send the prompt to the client for the main question
             await websocket.send(event.prefix)
             # Wait for client response over the websocket
             response = await websocket.recv()
@@ -226,39 +229,47 @@ async def websocket_workflow_handler(websocket):
             handler.ctx.send_event(
                 ValidatedQuestionEvent(response=response)
             )
-        elif isinstance(event, AdditionlInfo):  # or use AdditionlInfo if that is the exact class name
+        elif isinstance(event, AdditionlInfo):
+            # Send the follow-up clarification prompt to the client
             await websocket.send(event.prefix)
             response = await websocket.recv()
             handler.ctx.send_event(
                 RephraseQuestion(response=response)
             )
-            
-        # if isinstance(event, ProgressEvent):
-        #     # print("##########################################")
-        #     await websocket.send(str(event.msg))
-            # print(event.msg)
-            # pass
+        elif isinstance(event, ProgressEvent):
+            print("##########################################")
+            if event.msg:  # Ensure it's not empty
+                await websocket.send(str(event.msg))
+                print("Sent message:", event.msg)
+            else:
+                print("Skipping empty progress event.")
 
     # Once the workflow is complete, get the final result
     final_result = await handler
     # Send the final result to the client
     await websocket.send(str(final_result))
-
+    # Inform the client that the workflow is complete and they may send a new question
+    await websocket.send("Workflow complete. Please enter your next question.")
 
 async def echo(websocket):
     print("Websocket client connected.")
     try:
-         while True:
+        # Continuously handle workflows on the same connection
+        while True:
             await websocket_workflow_handler(websocket)
-            # Optionally, inform the client that a new workflow is starting.
-            await websocket.send("Workflow complete. Starting new workflow...")
     except websockets.exceptions.ConnectionClosed as e:
         print("Websocket client disconnected.", e)
 
-
 async def start_websocket_server():
-    # Disable origin checking by setting origins to None
-    async with websockets.serve(echo, "0.0.0.0", 8765, origins=None):
+    # Disable origin checking by setting origins to None and set ping settings
+    async with websockets.serve(
+            echo,
+            "0.0.0.0",
+            8765,
+            origins=None,
+            ping_interval=80,
+            ping_timeout=20
+        ):
         print("Websocket server started on ws://0.0.0.0:8765")
         await asyncio.Future()  # run forever
 
@@ -549,13 +560,34 @@ class question_validate_wf(Workflow):
             
             # print("query generated")
             # print(query)
-            
+            ctx.write_event_to_stream(ProgressEvent(msg=f"trying to generate query"))
             
             for attempt in range(retry):
                 try:
                     with engine.connect() as conn:
                         # Safety check
                         if any(keyword in query.upper() for keyword in [" DROP ", "DELETE", "UPDATE", "INSERT"]):
+                            prev_sql_list.append(query)
+                            prev_fail_reason.append("""Modification queries are blocked" DROP ", "DELETE", "UPDATE", "INSERT" """ )
+                            
+                            # Regenerate prompt with updated attempts
+                            prev_sql_str = "\n- ".join(prev_sql_list)
+                            prev_fail_str = "\n- ".join(prev_fail_reason)
+                            formatted_prompt = sql_prompt.format(
+                                question=question,
+                                schema=schema,
+                                domain_knowledge=domain_knowledge,
+                                prev_sql_list=prev_sql_str,
+                                prev_fail_reason=prev_fail_str,
+                                date=date,
+                            )
+                            # Regenerate query
+                            try:
+                                response = llm_engine.complete(formatted_prompt).text.strip()
+                                # print(response)
+                                query = json.loads(response)['query']
+                            except (json.JSONDecodeError, KeyError) as e:
+                                continue
                             raise ValueError("Modification queries are blocked")
                         
                         # Execute and fetch results
@@ -713,14 +745,14 @@ if __name__ == '__main__':
 
 
 
-#   websocat ws://localhost:8765/
+#  websocat -n -E -v ws://localhost:8765/
 #   curl -X POST http://localhost:5000/update_tables      -H "Content-Type: application/json"      -d '{"indices": [0, 2, 4]}'
 #   curl http://localhost:5000/tables
 #   curl http://localhost:5000/
 #   curl http://localhost:5000/all_tables
 
 
-# websocat ws://103.227.96.222:8765/
+# websocat -n -E -v ws://103.227.96.222:8765/
 # curl -X POST http://103.227.96.222:5000/update_tables      -H "Content-Type: application/json"      -d '{"indices": [0, 2, 4]}'
 # curl http://103.227.96.222:5000/tables
 # curl http://103.227.96.222:5000/
