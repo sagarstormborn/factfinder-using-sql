@@ -1,0 +1,7 @@
+PT_7930-PV – DDG suction pressure.  Normal range is -1.9, if suction drops to above -1.0, dryers are down.
+FIC_70101-PV – FST feed.  Normal range is ~750gpm; low deviation of 20% indicates reduced rate, value of <100 FST is down.
+FIC_024310B-PV – SMT feed. Normal range is ~1000gpm. Low deviation of 20% indicates reduced rate, value of <100 SMT is down.
+FIC_6851-PV – Tricanter feed.  Normal range is 60gpm. Low deviation of 20% indicates reduced rate, value of <10gpm tricanter is down.
+FIC_161351-PV  – Sedicanter feed.  Normal range is 160gpm, Low deviation of 20% indicates reduced rate, value of <50gpm sedicanters down.
+FI_4505-PV – 190 flow to storage – Normal range is 110gpm.  Low deviation of 20% indicates reduced rate, value of <20gpm distillation down.
+FIC_8401-PV – Mole sieve feed rate – Normal range is 110gpm. Low deviation of 20% indicates reduced rate, value of <20gpm Mole sieves down.

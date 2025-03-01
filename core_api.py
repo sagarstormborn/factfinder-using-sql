@@ -80,16 +80,15 @@ sql_database=None
 engine=None
 inspector=None
 #todo update this using api
-domain_knowledge = """
-PT_7930-PV – DDG suction pressure.  Normal range is -1.9, if suction drops to above -1.0, dryers are down.
-FIC_70101-PV – FST feed.  Normal range is ~750gpm; low deviation of 20% indicates reduced rate, value of <100 FST is down.
-FIC_024310B-PV – SMT feed. Normal range is ~1000gpm. Low deviation of 20% indicates reduced rate, value of <100 SMT is down.
-FIC_6851-PV – Tricanter feed.  Normal range is 60gpm. Low deviation of 20% indicates reduced rate, value of <10gpm tricanter is down.
-FIC_161351-PV  – Sedicanter feed.  Normal range is 160gpm, Low deviation of 20% indicates reduced rate, value of <50gpm sedicanters down.
-FI_4505-PV – 190 flow to storage – Normal range is 110gpm.  Low deviation of 20% indicates reduced rate, value of <20gpm distillation down.
-FIC_8401-PV – Mole sieve feed rate – Normal range is 110gpm. Low deviation of 20% indicates reduced rate, value of <20gpm Mole sieves down.
-"""
-
+domain_knowledge = ""
+# PT_7930-PV – DDG suction pressure.  Normal range is -1.9, if suction drops to above -1.0, dryers are down.
+# FIC_70101-PV – FST feed.  Normal range is ~750gpm; low deviation of 20% indicates reduced rate, value of <100 FST is down.
+# FIC_024310B-PV – SMT feed. Normal range is ~1000gpm. Low deviation of 20% indicates reduced rate, value of <100 SMT is down.
+# FIC_6851-PV – Tricanter feed.  Normal range is 60gpm. Low deviation of 20% indicates reduced rate, value of <10gpm tricanter is down.
+# FIC_161351-PV  – Sedicanter feed.  Normal range is 160gpm, Low deviation of 20% indicates reduced rate, value of <50gpm sedicanters down.
+# FI_4505-PV – 190 flow to storage – Normal range is 110gpm.  Low deviation of 20% indicates reduced rate, value of <20gpm distillation down.
+# FIC_8401-PV – Mole sieve feed rate – Normal range is 110gpm. Low deviation of 20% indicates reduced rate, value of <20gpm Mole sieves down.
+DOMAIN_KNOWLEDGE_FILE = '/home/sagar/Desktop/Coding/my_github/factfinder-using-sql/domain_knowledge.txt'
  #sql database uri 
     
 @dataclass
@@ -129,7 +128,7 @@ def get_all_tables():
 
 @app.route('/update_tables', methods=['POST'])
 def update_tables():
-    global global_current_tables
+    global global_current_tables,all_possible_tables, sql_database
     try:
         # Expect a list of indices from the JSON payload
         indices = request.json.get('indices', [])
@@ -137,6 +136,29 @@ def update_tables():
         init_db()
         update_list_in_file(file_path_table, global_current_tables)
         return jsonify({'message': 'Tables updated successfully'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+    
+
+@app.route('/domain_knowledge', methods=['GET'])
+def get_domain_knowledge():
+    """Return the current domain knowledge string."""
+    global domain_knowledge
+    return jsonify({'domain_knowledge': domain_knowledge})
+
+@app.route('/update_domain_knowledge', methods=['POST'])
+def update_domain_knowledge_route():
+    """Update the domain knowledge from the provided JSON payload."""
+    global domain_knowledge
+    try:
+        new_content = request.json.get('content', None)
+        if new_content is None:
+            return jsonify({'error': 'Missing "content" in JSON payload'}), 400
+        update_domain_knowledge_file(new_content)
+        return jsonify({
+            'message': 'Domain knowledge updated successfully',
+            'domain_knowledge': domain_knowledge
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
@@ -148,6 +170,21 @@ def run_flask():
 # --------------------
 # Helper function 
 # --------------------
+def load_domain_knowledge():
+    """Load domain knowledge from file into the global variable."""
+    global domain_knowledge
+    if os.path.exists(DOMAIN_KNOWLEDGE_FILE):
+        with open(DOMAIN_KNOWLEDGE_FILE, 'r') as f:
+            domain_knowledge = f.read()
+    else:
+        domain_knowledge = ""
+        
+def update_domain_knowledge_file(new_content):
+    """Update the domain knowledge file with new content and reload the global variable."""
+    with open(DOMAIN_KNOWLEDGE_FILE, 'w') as f:
+        f.write(new_content)
+    load_domain_knowledge()
+    
 
 def read_list_from_file(filename):
     """Reads a list from a file and returns it."""
@@ -282,7 +319,7 @@ You are a SQL optimization engineer with deep domain knowledge of industrial equ
 
 1. Schema Mapping:
 - Identify required tables and the first row of the data from: {schema}
-- Locate exact column matches for equipment IDs, timestamps, and metrics and understand the meaning based on just the first row given 
+- Locate exact column matches for equipment IDs, timestamps, and metrics and understand the meaning based on just the first row data given 
 - Verify join paths using foreign keys
 
 2. Domain Validation:
@@ -299,6 +336,8 @@ Additional Context:
 - current data time {date}
 - A SQL engine is available to execute the query and get rest of the data from the tables 
 - If any information is missing or unclear, specify exactly what is needed.
+- Note: Only ask for clarification on essential missing or ambiguous information. Do not inquire about every minor detail.
+
 
 Response Rules:
 - Return **ONLY valid JSON** with the following structure:
@@ -368,24 +407,30 @@ Role: Expert SQL Engineer specializing in industrial equipment systems
 
 Task: Generate accurate SQL query following this workflow:
 
-1. **Schema Analysis**:
-- Identify required tables and its column and Use first row data to understand column meanings: {schema}
-- Establish table relationships using foreign keys
+Follow this analysis process:
 
-2. **Domain Validation**:
-- Cross-check with industry specific knowledge:
-{domain_knowledge}
+1. Schema Mapping:
+- Identify required tables and the first row of the data from: {schema}
+- Locate exact column matches for equipment IDs, timestamps, and metrics and understand the meaning based on just the first row data given 
+- Verify join paths using foreign keys
 
+2. Domain Validation:
+- Cross-reference {domain_knowledge} thresholds
+- Confirm failure state calculations align with domain logic
 
-3. Error Avoidance:
+3. Join Requirement Check:
+- Determine if question requires combining operational metrics
+- Validate time synchronization between tables if joining
+
+4. Error Avoidance:
 - Previous failed queries: {prev_sql_list}
 - Failure reasons: {prev_fail_reason}
 - Actively avoid repeating these patterns
 
-4. Temporal Context:
+5. Temporal Context:
 - Current system datetime: {date}
 
-**Query Requirements**:
+Query Requirements:
 - Use only tables in the schema
 - Prioritize index-friendly operations
 - Include necessary JOINs but avoid Cartesian products
@@ -431,7 +476,7 @@ class ProgressEvent(Event):
 class question_validate_wf(Workflow):
     def __init__(self, llm1,llm2,llm3, schema, domain_knowledge,engine,debug=True):
         # Remove the self.ctx.set() call from here
-        super().__init__(timeout=600, verbose=True)
+        super().__init__(timeout=6000, verbose=True)
         self.llm1 = llm1
         self.llm2 = llm2
         self.llm3= llm3
@@ -733,6 +778,7 @@ if __name__ == '__main__':
     
     # init database 
     init_db()
+    load_domain_knowledge()
     
     # Start Flask in a separate thread
     file_path_table = '/home/sagar/Desktop/Coding/my_github/factfinder-using-sql/default_table.txt'
@@ -761,3 +807,13 @@ if __name__ == '__main__':
 
 # sample question
 # How is Fermentation doing, % ethanol, % total sugars, % lactic acid, % acetic acid, pH and temperature in last batch
+
+#run command
+#  nohup python3 core_api.py > log_25-02-25.txt 2>&1 &
+
+
+# curl -X POST http://103.227.96.222:5000/update_domain_knowledge \
+#      -H "Content-Type: application/json" \
+#      -d '{"content": "PT_7930-PV – DDG suction pressure.  Normal range is -1.9, if suction drops to above -1.0, dryers are down.\nFIC_70101-PV – FST feed.  Normal range is ~750gpm; low deviation of 20% indicates reduced rate, value of <100 FST is down.\nFIC_024310B-PV – SMT feed. Normal range is ~1000gpm. Low deviation of 20% indicates reduced rate, value of <100 SMT is down.\nFIC_6851-PV – Tricanter feed.  Normal range is 60gpm. Low deviation of 20% indicates reduced rate, value of <10gpm tricanter is down.\nFIC_161351-PV  – Sedicanter feed.  Normal range is 160gpm, Low deviation of 20% indicates reduced rate, value of <50gpm sedicanters down.\nFI_4505-PV – 190 flow to storage – Normal range is 110gpm.  Low deviation of 20% indicates reduced rate, value of <20gpm distillation down.\nFIC_8401-PV – Mole sieve feed rate – Normal range is 110gpm. Low deviation of 20% indicates reduced rate, value of <20gpm Mole sieves down."}'
+
+# curl http://103.227.96.222:5000/domain_knowledge

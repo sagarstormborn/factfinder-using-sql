@@ -1,1 +1,1 @@
-["DE", "HPLC_Data", "fermentation_data", "plc_data_1", "plc_data_2", "plc_data_3", "plc_data_4"]
+['CellometerSync', 'HPLCSync', 'NIRSync', 'fermentation_data', 'plc_data_1', 'plc_data_2', 'plc_data_3', 'plc_data_4', 'DE']
